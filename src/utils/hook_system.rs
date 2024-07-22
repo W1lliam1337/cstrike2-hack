@@ -54,9 +54,15 @@ impl Hook {
     }
 }
 
-/// Initialize hooks.
+/// Initializes the MinHook library.
+///
+/// This function initializes the MinHook library, which is used for creating and managing hooks.
+///
+/// # Returns
+///
+/// * `Ok(())` if the MinHook library is successfully initialized.
+/// * `Err(String)` if an error occurs during initialization. The error message will provide details about the failure.
 pub fn initialize_minhook() -> Result<(), String> {
-    // Initialize MinHook
     unsafe {
         if minhook_sys::MH_Initialize() != 0 {
             return Err("Failed to initialize MinHook".to_string());

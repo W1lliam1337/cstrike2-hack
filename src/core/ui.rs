@@ -11,10 +11,27 @@ use windows::Win32::UI::WindowsAndMessaging::{
 static mut SHOW_MENU: bool = true;
 
 /// Toggles the visibility of the menu.
+///
+/// This function toggles the value of the `SHOW_MENU` static variable, which controls the visibility of the menu.
+/// When `SHOW_MENU` is `true`, the menu will be displayed; when `SHOW_MENU` is `false`, the menu will be hidden.
+///
+/// # Safety
+///
+/// This function is marked as `unsafe` because it directly manipulates a static mutable variable, which can lead to data races.
+/// It is assumed that the caller has ensured that the static variable is accessed in a thread-safe manner.
 pub unsafe fn toggle_menu() {
     SHOW_MENU = !SHOW_MENU;
 }
 
+/// Renders the menu UI using the provided Egui context and mutable integer reference.
+///
+/// This function checks the value of the `SHOW_MENU` static variable and returns early if it is `false`.
+/// It then initializes static mutable variables for UI elements and renders the menu using Egui.
+///
+/// # Parameters
+///
+/// * `ctx`: A reference to the Egui context used for rendering the menu.
+/// * `i`: A mutable reference to an integer value that is used within the menu rendering.
 pub fn draw_menu(ctx: &Context, i: &mut i32) {
     if !unsafe { SHOW_MENU } {
         return;
