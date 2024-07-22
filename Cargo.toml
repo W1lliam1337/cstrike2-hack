@@ -2,10 +2,17 @@
 name = "cs2_internal"
 version = "0.1.0"
 edition = "2021"
+description = "An internal cheat base for Counter-Strike 2 (CS2) written in Rust."
+license = "MIT"
+repository = "https://github.com/W1lliam1337/cstrike2-hack"
+homepage = "https://github.com/W1lliam1337/cstrike2-hack"
+readme = "README.md"
+keywords = ["cs2", "cheat", "rust", "internal"]
+categories = ["game-development", "graphics"]
 
 [lib]
 crate-type = ["cdylib"]
-path = "src/lib.rs"
+path = "src/entry_point.rs"
 
 [dependencies]
 winapi = { version = "0.3", features = ["consoleapi", "psapi"] }
