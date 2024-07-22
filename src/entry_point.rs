@@ -4,7 +4,7 @@ pub mod cs2;
 pub mod utils;
 
 use common::*;
-use winapi::um::{consoleapi, libloaderapi, wincon};
+use winapi::um::{consoleapi, libloaderapi, processthreadsapi, wincon};
 
 /// This function is responsible for initializing the cheat.
 /// It is called as a thread function when the DLL is loaded into a process.
@@ -53,7 +53,7 @@ pub extern "system" fn DllMain(
                     libloaderapi::DisableThreadLibraryCalls(module as *mut HINSTANCE__);
                     consoleapi::AllocConsole();
 
-                    winapi::um::processthreadsapi::CreateThread(
+                    processthreadsapi::CreateThread(
                         null_mut(),           // Security attributes
                         0,                    // Stack size
                         Some(thread_startup), // Thread function

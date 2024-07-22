@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use egui::{Color32, Context, Pos2, Rect, RichText, ScrollArea, Slider, Stroke, Widget};
 
 use windows::Win32::UI::WindowsAndMessaging::{
