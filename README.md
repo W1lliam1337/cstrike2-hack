@@ -1,4 +1,4 @@
-# CS2 Internal Cheat Base ![CS2](https://img.shields.io/badge/game-CS2-blue) ![LIC](https://img.shields.io/github/license/W1lliam1337/digital-sdk) ![LANG](https://img.shields.io/badge/language-rust-green)
+# CS2 Internal Cheat Base ![CS2](https://img.shields.io/badge/game-CS2-blue) ![LIC](https://img.shields.io/github/license/W1lliam1337/digital-sdk) ![LANG](https://img.shields.io/badge/language-rust-orange)
 ![App menu](https://i.imgur.com/yEG960q.png)
 
 ## Overview
@@ -23,7 +23,7 @@ cd cstrike2-hack
 ```
 cargo build --release
 ```
-- 4. **Run the project**:
+- **Run the project**:
 Inject the compiled binary into the CS2 process using your preferred DLL injector.
 
 ## Usage:
