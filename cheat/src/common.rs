@@ -1,9 +1,13 @@
-pub use core::ptr::null_mut;
-pub use std::{mem::transmute, sync::Once};
-pub use winapi::{
-    ctypes::{c_char, c_int, c_void},
-    shared::minwindef::{DWORD, HINSTANCE__, HMODULE},
+pub use std::ptr::null_mut;
+pub use std::{
+    ffi::{c_char, c_int, c_void, CString},
+    mem::transmute,
+    slice,
+    sync::Once,
+    sync::OnceLock,
 };
+
+pub use parking_lot::Mutex;
 
 /// A macro to cast a raw pointer to a specific type.
 ///

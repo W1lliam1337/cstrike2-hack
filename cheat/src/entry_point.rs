@@ -4,7 +4,14 @@ pub mod cs2;
 pub mod utils;
 
 use common::*;
-use winapi::um::{consoleapi, libloaderapi, processthreadsapi, wincon};
+
+use windows::Win32::{
+    Foundation::HMODULE,
+    System::{
+        Console::AllocConsole,
+        Threading::{CreateThread, THREAD_CREATION_FLAGS},
+    },
+};
 
 /// This function is responsible for initializing the cheat.
 /// It is called as a thread function when the DLL is loaded into a process.
@@ -15,13 +22,18 @@ use winapi::um::{consoleapi, libloaderapi, processthreadsapi, wincon};
 ///
 /// # Return Value
 ///
-/// Returns a `DWORD` value of 0. This value is not used by the operating system.
-extern "system" fn thread_startup(_: *mut c_void) -> DWORD {
-    core::bootstrap::initialize();
-    0
+/// Returns a `u32` value of 0. This value is not used by the operating system.
+extern "system" fn thread_startup(_: *mut c_void) -> u32 {
+    if let Err(e) = core::bootstrap::initialize() {
+        eprint!("Init failed: {}", e);
+        return 0;
+    } else {
+        println!("Initialized cheat successfully!");
+        return 0;
+    }
 }
 
-/// The `DllMain` function is the entry point for a dynamic-link library (DLL) and is called by the operating system
+/// The `dll_main` function is the entry point for a dynamic-link library (DLL) and is called by the operating system
 /// when the DLL is loaded or unloaded. It is responsible for initializing and cleaning up the DLL.
 ///
 /// # Parameters
@@ -37,9 +49,9 @@ extern "system" fn thread_startup(_: *mut c_void) -> DWORD {
 ///
 /// The function should return a boolean value indicating success. If the function returns `1`, the DLL load is
 /// successful. If the function returns `0`, the DLL load is unsuccessful.
-#[no_mangle]
-pub extern "system" fn DllMain(
-    module: *mut c_void,
+#[export_name = "DllMain"]
+pub extern "system" fn dll_main(
+    _module: HMODULE,
     reason_for_call: u32,
     _reserved: *mut c_void,
 ) -> i32 {
@@ -50,17 +62,19 @@ pub extern "system" fn DllMain(
             INIT.call_once(|| {
                 // Create a thread to initialize the cheat
                 unsafe {
-                    libloaderapi::DisableThreadLibraryCalls(module as *mut HINSTANCE__);
-                    consoleapi::AllocConsole();
+                    if AllocConsole().is_err() {
+                        return;
+                    }
 
-                    processthreadsapi::CreateThread(
-                        null_mut(),           // Security attributes
-                        0,                    // Stack size
-                        Some(thread_startup), // Thread function
-                        null_mut(),           // Parameter to thread function
-                        0,                    // Creation flags
-                        null_mut(),           // Thread identifier
-                    );
+                    CreateThread(
+                        None,                     // Security attributes
+                        0,                        // Stack size
+                        Some(thread_startup),     // Thread function
+                        Some(null_mut()),         // Parameter to thread function
+                        THREAD_CREATION_FLAGS(0), // Creation flags
+                        None,                     // Thread identifier
+                    )
+                    .unwrap();
                 }
             });
         }
@@ -68,7 +82,6 @@ pub extern "system" fn DllMain(
             println!("DLL unloaded");
 
             // TODO: Unload cheat and free resources
-            unsafe { wincon::FreeConsole() };
         }
         _ => {}
     }

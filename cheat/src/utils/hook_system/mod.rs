@@ -1,15 +1,13 @@
-extern crate minhook_sys;
-
-use std::collections::VecDeque;
-
 use crate::common;
 use common::*;
 
+use std::collections::VecDeque;
+
 /// Struct representing a hook.
 pub struct Hook {
-    target: *mut std::ffi::c_void,
-    detour: *mut std::ffi::c_void,
-    original: *mut std::ffi::c_void,
+    target: *mut c_void,
+    detour: *mut c_void,
+    original: *mut c_void,
 }
 
 pub static mut TARGETS: VecDeque<Hook> = VecDeque::new();
@@ -17,11 +15,11 @@ pub static mut TARGETS: VecDeque<Hook> = VecDeque::new();
 impl Hook {
     pub fn get_proto_original<F, R>(func: F) -> Option<R>
     where
-        F: Fn() -> *mut std::ffi::c_void,
-        R: From<*mut std::ffi::c_void>,
+        F: Fn() -> *mut c_void,
+        R: From<*mut c_void>,
     {
         unsafe {
-            let it = TARGETS.iter().find(|hook| hook.detour == func() as *mut std::ffi::c_void);
+            let it = TARGETS.iter().find(|hook| hook.detour == func() as *mut c_void);
             if let Some(hook) = it {
                 Some(R::from(hook.original))
             } else {
@@ -30,19 +28,16 @@ impl Hook {
         }
     }
 
-    pub fn hook(target: *const std::ffi::c_void, detour: *const std::ffi::c_void) -> bool {
+    pub fn hook(target: *const c_void, detour: *const c_void) -> bool {
         unsafe {
             let mut h = Hook {
-                target: target as *mut std::ffi::c_void,
-                detour: detour as *mut std::ffi::c_void,
+                target: target as *mut c_void,
+                detour: detour as *mut c_void,
                 original: null_mut(),
             };
 
-            if minhook_sys::MH_CreateHook(
-                h.target,
-                h.detour,
-                &mut h.original as *mut *mut std::ffi::c_void,
-            ) == 0
+            if minhook_sys::MH_CreateHook(h.target, h.detour, &mut h.original as *mut *mut c_void)
+                == 0
             {
                 minhook_sys::MH_EnableHook(h.target);
                 TARGETS.push_back(h);
@@ -62,7 +57,7 @@ impl Hook {
 ///
 /// * `Ok(())` if the MinHook library is successfully initialized.
 /// * `Err(String)` if an error occurs during initialization. The error message will provide details about the failure.
-pub fn initialize_minhook() -> Result<(), String> {
+pub fn initialize_minhook() -> anyhow::Result<(), String> {
     unsafe {
         if minhook_sys::MH_Initialize() != 0 {
             return Err("Failed to initialize MinHook".to_string());
@@ -93,11 +88,14 @@ macro_rules! create_hook {
         let target_function_ptr = $target_function.unwrap_or(0) as *mut std::ffi::c_void;
         let detour_function_ptr = $detour_function as *const std::ffi::c_void;
 
+        if target_function_ptr == std::ptr::null_mut() {
+            bail!("Target function pointer is null");
+        }
+
         println!("Hooking target function: 0x{:x}", $target_function.unwrap_or(0));
 
         if !hook_system::Hook::hook(target_function_ptr, detour_function_ptr) {
-            eprintln!("Failed to enable hook");
-            return;
+            bail!("Failed to enable hook");
         }
     };
 }

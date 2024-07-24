@@ -1,13 +1,16 @@
 use crate::common;
 use common::*;
 
-use std::{ffi::CString, slice};
-
-use winapi::um::{
-    libloaderapi::{GetModuleHandleW, GetProcAddress},
-    processthreadsapi::GetCurrentProcess,
-    psapi::{GetModuleInformation, MODULEINFO},
+use windows::Win32::{
+    Foundation::HMODULE,
+    System::{
+        LibraryLoader::{GetModuleHandleW, GetProcAddress},
+        ProcessStatus::{GetModuleInformation, MODULEINFO},
+        Threading::GetCurrentProcess,
+    },
 };
+
+use windows::core::{PCSTR, PCWSTR};
 
 /// Obtains a module handle by its name.
 ///
@@ -25,10 +28,9 @@ use winapi::um::{
 /// Returns a raw pointer to the module handle if the module is found. If the module is not found,
 /// the function returns `null`. The returned handle can be used with other Windows API functions to
 /// interact with the module.
-pub fn get_module_handle(module_name: &str) -> *mut c_void {
-    let collect = module_name.encode_utf16().chain(std::iter::once(0)).collect();
-    let module_name_wide: Vec<u16> = collect;
-    unsafe { GetModuleHandleW(module_name_wide.as_ptr()) as *mut c_void }
+pub fn get_module_handle(module_name: &str) -> Option<HMODULE> {
+    let module_name_wide: Vec<u16> = module_name.encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe { GetModuleHandleW(PCWSTR(module_name_wide.as_ptr())).ok() }
 }
 
 /// Retrieves the address of a specified procedure within a module.
@@ -49,9 +51,12 @@ pub fn get_module_handle(module_name: &str) -> *mut c_void {
 /// function signature and used to call the procedure directly.
 ///
 /// If the specified procedure is not found within the module, the function returns `null`.
-pub fn get_proc_address(module_handle: *mut c_void, proc_name: &str) -> *mut c_void {
+pub fn get_proc_address(module_handle: HMODULE, proc_name: &str) -> Option<*mut c_void> {
     let proc_name_cstr = CString::new(proc_name).expect("CString::new failed");
-    unsafe { GetProcAddress(module_handle as *mut _, proc_name_cstr.as_ptr()) as *mut c_void }
+    unsafe {
+        GetProcAddress(module_handle, PCSTR(proc_name_cstr.as_ptr() as *const u8))
+            .map(|addr| addr as *mut _)
+    }
 }
 
 /// Retrieves module information for a given module handle.
@@ -71,18 +76,19 @@ pub fn get_proc_address(module_handle: *mut c_void, proc_name: &str) -> *mut c_v
 /// and entry point of the module.
 ///
 /// Returns `None` if the module information cannot be obtained or if an error occurs.
-pub fn get_module_info(module_handle: *mut c_void) -> Option<MODULEINFO> {
+pub fn get_module_info(module_handle: HMODULE) -> Option<MODULEINFO> {
     let mut module_info =
         MODULEINFO { lpBaseOfDll: null_mut(), SizeOfImage: 0, EntryPoint: null_mut() };
 
     if unsafe {
         GetModuleInformation(
             GetCurrentProcess(),
-            module_handle as *mut _,
+            module_handle,
             &mut module_info,
             std::mem::size_of::<MODULEINFO>() as u32,
         )
-    } != 0
+    }
+    .is_ok()
     {
         Some(module_info)
     } else {
@@ -106,7 +112,7 @@ pub fn get_module_info(module_handle: *mut c_void) -> Option<MODULEINFO> {
 ///
 /// Returns `Some(address)` if the pattern is found, where `address` is the memory address of the first occurrence.
 /// Returns `None` if the pattern is not found or if an error occurs during pattern parsing.
-pub fn pattern_search(module_handle: *mut c_void, pattern: &str) -> Option<usize> {
+pub fn pattern_search(module_handle: HMODULE, pattern: &str) -> Option<usize> {
     // Split the pattern string into bytes and handle wildcards
     let pattern_bytes: Result<Vec<Option<u8>>, _> =
         pattern
@@ -164,12 +170,16 @@ pub fn pattern_search(module_handle: *mut c_void, pattern: &str) -> Option<usize
 ///
 /// Returns a raw pointer to the interface if found, or `null` if the interface is not found.
 /// The returned pointer can be safely cast to the desired interface type.
-pub fn get_interface(module_handle: *mut c_void, interface_name: &str) -> *const usize {
-    let function: unsafe extern "C" fn(
-        name: *const c_char,
-        return_code: *const c_int,
-    ) -> *const c_void = unsafe { transmute(get_proc_address(module_handle, "CreateInterface")) };
+pub fn get_interface(module_handle: HMODULE, interface_name: &str) -> Option<*const usize> {
+    type CreateInterfaceFn = unsafe extern "C" fn(*const c_char, *const c_int) -> *const c_void;
 
+    let function: CreateInterfaceFn = unsafe {
+        transmute(
+            get_proc_address(module_handle, "CreateInterface")
+                .expect("Failed to get function address"),
+        )
+    };
     let interface_name_cstr = CString::new(interface_name).expect("CString::new failed");
-    unsafe { function(interface_name_cstr.as_ptr(), null_mut()) as *const usize }
+
+    Some(unsafe { function(interface_name_cstr.as_ptr(), null_mut()) as *const usize })
 }

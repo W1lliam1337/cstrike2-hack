@@ -1,0 +1,46 @@
+[package]
+name = "cs2_internal"
+version = "0.1.0"
+edition = "2021"
+description = "An internal cheat base for Counter-Strike 2 (CS2) written in Rust."
+license = "MIT"
+repository = "https://github.com/W1lliam1337/cstrike2-hack"
+homepage = "https://github.com/W1lliam1337/cstrike2-hack"
+readme = "README.md"
+keywords = ["cs2", "cheat", "rust", "internal"]
+categories = ["game-development", "graphics"]
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/entry_point.rs"
+
+[dependencies]
+minhook-sys = "0.1.1"
+lazy_static = "1.5"
+once_cell = "1.19"
+paste = "1.0"
+egui = { version = "0.22.0", features = [ "mint" ] }
+egui-directx11 = { path = "../egui/egui-directx11" }
+egui-win32 = { path="../egui/egui-win32" }
+anyhow = "1.0.75"
+parking_lot = "0.12.1"
+
+[dependencies.windows]
+version = "0.51.0"
+features = [
+    "Win32_Foundation",
+    "Win32_System_SystemServices",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Console",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_System_ProcessStatus",
+    "Win32_Security"
+]

@@ -1,14 +1,16 @@
 use crate::{common, utils::module_handler};
 use common::*;
 
+use windows::Win32::Foundation::HMODULE;
+
 pub struct Module {
     name: &'static str,
-    handle: *mut c_void,
+    handle: HMODULE,
 }
 
 impl Module {
     pub fn new(name: &'static str) -> Self {
-        let handle = module_handler::get_module_handle(name);
+        let handle = module_handler::get_module_handle(name).expect("Failed to get module handle");
         Module { name, handle }
     }
 
@@ -17,11 +19,11 @@ impl Module {
     }
 
     pub fn get_export(&self, function_name: &str) -> Option<*mut c_void> {
-        Some(module_handler::get_proc_address(self.handle, function_name))
+        module_handler::get_proc_address(self.handle, function_name)
     }
 
     pub fn get_interface(&self, interface_name: &str) -> Option<*const usize> {
-        Some(module_handler::get_interface(self.handle, interface_name))
+        module_handler::get_interface(self.handle, interface_name)
     }
 
     pub fn name(&self) -> &str {
@@ -60,12 +62,15 @@ pub fn initialize_modules(names: &[&'static str]) {
 
         match MODULES.as_ref() {
             Some(modules) => {
-                modules.into_iter().for_each(|module| {
-                    println!("Initialized module: {} {:p}", module.name, module.handle);
+                modules.iter().for_each(|module| {
+                    println!(
+                        "Initialized module: {} {:p}",
+                        module.name, module.handle.0 as *const c_void
+                    );
                 });
             }
             None => {
-                println!("Failed to initialize modules");
+                eprintln!("Failed to initialize modules");
             }
         }
     });

@@ -1,0 +1,17 @@
+[package]
+name = "egui-win32"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+egui = "0.22.0"
+windows = { version = "0.51.1", features = [
+    "Win32_System_WindowsProgramming",
+    "Win32_Foundation",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Wdk_System_SystemInformation"
+] }
+clipboard-win = "4.5.0"

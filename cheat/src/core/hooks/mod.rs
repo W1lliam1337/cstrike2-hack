@@ -2,45 +2,35 @@ use crate::{
     create_hook,
     cs2::{self},
     get_original_fn,
-    utils::{self, hook_system},
+    utils::{self, hook_system, render},
 };
 
-use super::ui;
+use anyhow::bail;
 
 use windows::{
     core::HRESULT,
-    Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, WPARAM},
-        Graphics::Dxgi::{Common::DXGI_FORMAT, IDXGISwapChain},
-        UI::WindowsAndMessaging::{CallWindowProcW, WM_KEYDOWN},
-    },
+    Win32::Graphics::Dxgi::{Common::DXGI_FORMAT, IDXGISwapChain},
 };
 
-unsafe extern "system" fn hk_present(
-    swap_chain: IDXGISwapChain,
+extern "system" fn hk_present(
+    swapchain: IDXGISwapChain,
     sync_interval: u32,
     flags: u32,
 ) -> HRESULT {
     get_original_fn!(hk_present, original_fn, (IDXGISwapChain, u32, u32), HRESULT);
 
-    static INIT: std::sync::Once = std::sync::Once::new();
-    INIT.call_once(|| {
-        utils::render::init_render_data(&swap_chain);
-        utils::render::init_wnd_proc(&swap_chain.GetDesc().unwrap(), hk_wnd_proc);
-    });
+    render::dx11::init_from_swapchain(&swapchain);
 
-    utils::render::DX11.present(&swap_chain);
-
-    original_fn(swap_chain, sync_interval, flags)
+    original_fn(swapchain, sync_interval, flags)
 }
 
-unsafe extern "system" fn hk_resize_buffers(
-    swap_chain: IDXGISwapChain,
+extern "system" fn hk_resize_buffers(
+    swapchain: IDXGISwapChain,
     buffer_count: u32,
     width: u32,
     height: u32,
     new_format: DXGI_FORMAT,
-    swap_chain_flags: u32,
+    swapchain_flags: u32,
 ) -> HRESULT {
     get_original_fn!(
         hk_resize_buffers,
@@ -49,35 +39,19 @@ unsafe extern "system" fn hk_resize_buffers(
         HRESULT
     );
 
-    utils::render::DX11.resize_buffers(&swap_chain, || {
-        original_fn(swap_chain.clone(), buffer_count, width, height, new_format, swap_chain_flags)
-    })
+    let mut renderer = render::dx11::DX11
+        .get()
+        .expect(&"dx11 renderer is not initialized while resizing buffers")
+        .lock();
+
+    renderer
+        .resize_buffers(&swapchain, || {
+            original_fn(swapchain.clone(), buffer_count, width, height, new_format, swapchain_flags)
+        })
+        .expect(&"could not resize buffers")
 }
 
-unsafe extern "system" fn hk_wnd_proc(
-    hwnd: HWND,
-    msg: u32,
-    wparam: WPARAM,
-    lparam: LPARAM,
-) -> LRESULT {
-    utils::render::DX11.wnd_proc(msg, wparam, lparam);
-
-    match msg {
-        WM_KEYDOWN if wparam.0 == 0x2D => {
-            ui::toggle_menu(); // Toggle menu visibility
-        }
-        _ => (),
-    }
-
-    // Check if the menu is open and block input if necessary
-    if ui::should_block_input(msg) {
-        return LRESULT(1);
-    }
-
-    CallWindowProcW(utils::render::OLD_WND_PROC.unwrap(), hwnd, msg, wparam, lparam)
-}
-
-pub unsafe extern "system" fn hk_create_move(
+unsafe extern "system" fn hk_create_move(
     a1: *mut f32,
     a2: u64,
     a3: i8,
@@ -98,11 +72,10 @@ pub unsafe extern "system" fn hk_create_move(
 /// Initializes hooks for various modules in the game.
 ///
 /// This function initializes the MinHook library and sets up hooks for specific functions.
-pub fn initialize_hooks() {
+pub fn initialize_hooks() -> anyhow::Result<()> {
     // Initialize MinHook
     if let Err(status) = utils::hook_system::initialize_minhook() {
-        eprintln!("Failed to initialize MinHook: {}", status);
-        return;
+        bail!("Failed to initialize MinHook: {}", status);
     }
 
     let create_move_target = cs2::modules::client().find_seq_of_bytes("48 8B C4 4C 89 48 20 55");
@@ -116,4 +89,6 @@ pub fn initialize_hooks() {
     create_hook!(create_move_target, hk_create_move);
     create_hook!(present_target, hk_present);
     create_hook!(resize_buffers_target, hk_resize_buffers);
+
+    Ok(())
 }
