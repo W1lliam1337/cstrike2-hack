@@ -1,4 +1,5 @@
 use crate::{common, utils::module_handler};
+use anyhow::bail;
 use common::*;
 
 use once_cell::sync::OnceCell;
@@ -35,23 +36,42 @@ impl Module {
 
 static MODULES: OnceCell<Mutex<Vec<Module>>> = OnceCell::new();
 
-/// Initializes the static instances of the `Module` struct with the given module names.
-/// This function ensures that the modules are only initialized once, and provides access to the initialized modules through accessor functions.
+/// Initializes the specified modules and stores them in a static variable.
 ///
 /// # Arguments
 ///
-/// * `names` - A slice of module names (without the ".dll" extension) for which the `Module` instances will be initialized.
-pub fn initialize_modules(names: &[&'static str]) {
-    static INIT: Once = Once::new();
-    INIT.call_once(|| {
-        let modules = names.iter().map(|&name| Module::new(name)).collect::<Vec<_>>();
-        MODULES.set(Mutex::new(modules)).expect("Failed to initialize MODULES");
+/// * `names` - A slice of module names (without the ".dll" extension) to be initialized.
+///
+/// # Errors
+///
+/// Returns an error if any of the following conditions are met:
+/// - The modules have already been initialized.
+/// - Failed to get the module handle for any of the specified modules.
+/// - Failed to initialize the `MODULES` static variable.
+///
+/// # Example
+///
+/// ```rust
+/// use std::error::Error;
+///
+/// fn main() -> Result<(), Box<dyn Error>> {
+///     initialize_modules(&["client", "engine2", "gameoverlayrenderer64"])?;
+///     // Use the initialized modules here
+///     Ok(())
+/// }
+/// ```
+pub fn initialize_modules(names: &[&'static str]) -> anyhow::Result<()> {
+    if !MODULES.get().is_none() {
+        bail!("Modules are already initialized");
+    }
 
-        let modules = MODULES.get().expect("MODULES should be initialized").lock();
-        for module in modules.iter() {
-            println!("Initialized module: {} {:p}", module.name, module.handle.0 as *const c_void);
-        }
-    });
+    let modules = names.iter().map(|&name| Module::new(name)).collect::<Vec<_>>();
+    MODULES.set(Mutex::new(modules)).expect("Failed to initialize MODULES");
+
+    let modules = MODULES.get().expect("MODULES should be initialized").lock();
+    Ok(for module in modules.iter() {
+        println!("Initialized module: {} {:p}", module.name, module.handle.0 as *const c_void);
+    })
 }
 
 /// This macro generates accessor functions for static instances of the `Module` struct.

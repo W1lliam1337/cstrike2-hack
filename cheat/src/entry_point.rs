@@ -24,13 +24,16 @@ use windows::Win32::{
 ///
 /// Returns a `u32` value of 0. This value is not used by the operating system.
 extern "system" fn thread_startup(_: *mut c_void) -> u32 {
-    if let Err(e) = core::bootstrap::initialize() {
-        eprint!("Init failed: {e}");
-        0
-    } else {
-        println!("Initialized cheat successfully!");
-        0
+    match core::bootstrap::initialize() {
+        Err(e) => {
+            eprint!("Init failed: {e}");
+        }
+        Ok(_) => {
+            println!("Initialized cheat successfully!");
+        }
     }
+
+    0
 }
 
 /// The `dll_main` function is the entry point for a dynamic-link library (DLL) and is called by the operating system
