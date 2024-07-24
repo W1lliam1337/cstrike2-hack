@@ -46,7 +46,8 @@ unsafe extern "system" fn enum_window(window: HWND, lparam: LPARAM) -> BOOL {
 
     if GetCurrentProcessId() != window_proc_id
         || !is_main_window(window)
-        || window == GetConsoleWindow() {
+        || window == GetConsoleWindow()
+    {
         return TRUE;
     }
 

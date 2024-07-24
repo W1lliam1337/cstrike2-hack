@@ -71,9 +71,9 @@ unsafe extern "system" fn wndproc_hk(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
-    INPUT.get().expect(&"INPUT is not initialized").lock().process(msg, wparam.0, lparam.0);
+    INPUT.get().expect("INPUT is not initialized").lock().process(msg, wparam.0, lparam.0);
 
-    let wndproc = WNDPROC.get().expect(&"WNDPROC is not initialized");
+    let wndproc = WNDPROC.get().expect("WNDPROC is not initialized");
 
     match msg {
         WM_KEYDOWN if wparam.0 == 0x2D => {

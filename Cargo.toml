@@ -1,4 +1,5 @@
 [workspace]
+resolver = "2"
 members = [
     "cheat",
     "egui/egui-directx11",
@@ -9,4 +10,3 @@ members = [
 windows = "0.51.1"
 
 [workspace.lints.clippy]
-needless_borrow = "allow"

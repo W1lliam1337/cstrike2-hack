@@ -92,17 +92,17 @@ pub fn init_from_swapchain(swapchain: &IDXGISwapChain) {
         .get_or_init(|| {
             Mutex::new(
                 DirectX11Renderer::init_from_swapchain(&swapchain, egui::Context::default())
-                    .expect(&"could not create dx11 renderer"),
+                    .expect("could not create dx11 renderer"),
             )
         })
         .lock();
 
     let input = win32::INPUT
         .get()
-        .expect(&"win32::INPUT is not initialized")
+        .expect("win32::INPUT is not initialized")
         .lock()
         .collect_input()
-        .expect(&"could not collect input");
+        .expect("could not collect input");
 
     let mut settings = settings::SETTINGS.lock();
 

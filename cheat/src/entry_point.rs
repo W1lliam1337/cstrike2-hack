@@ -25,11 +25,11 @@ use windows::Win32::{
 /// Returns a `u32` value of 0. This value is not used by the operating system.
 extern "system" fn thread_startup(_: *mut c_void) -> u32 {
     if let Err(e) = core::bootstrap::initialize() {
-        eprint!("Init failed: {}", e);
-        return 0;
+        eprint!("Init failed: {e}");
+        0
     } else {
         println!("Initialized cheat successfully!");
-        return 0;
+        0
     }
 }
 
@@ -74,7 +74,7 @@ pub extern "system" fn dll_main(
                         THREAD_CREATION_FLAGS(0), // Creation flags
                         None,                     // Thread identifier
                     )
-                    .unwrap();
+                    .expect("Failed to create thread");
                 }
             });
         }

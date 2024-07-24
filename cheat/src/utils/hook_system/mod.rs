@@ -2,15 +2,17 @@ use crate::common;
 use common::*;
 
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicPtr, Ordering};
 
-/// Struct representing a hook.
 pub struct Hook {
-    target: *mut c_void,
-    detour: *mut c_void,
-    original: *mut c_void,
+    target: AtomicPtr<c_void>,
+    detour: AtomicPtr<c_void>,
+    original: AtomicPtr<c_void>,
 }
 
-pub static mut TARGETS: VecDeque<Hook> = VecDeque::new();
+lazy_static::lazy_static! {
+    static ref TARGETS: Mutex<VecDeque<Hook>> = Mutex::new(VecDeque::new());
+}
 
 impl Hook {
     pub fn get_proto_original<F, R>(func: F) -> Option<R>
@@ -18,29 +20,28 @@ impl Hook {
         F: Fn() -> *mut c_void,
         R: From<*mut c_void>,
     {
-        unsafe {
-            let it = TARGETS.iter().find(|hook| hook.detour == func() as *mut c_void);
-            if let Some(hook) = it {
-                Some(R::from(hook.original))
-            } else {
-                None
-            }
-        }
+        let targets = TARGETS.lock();
+        let it = targets.iter().find(|hook| hook.detour.load(Ordering::SeqCst) == func());
+        it.map(|hook| R::from(hook.original.load(Ordering::SeqCst)))
     }
 
     pub fn hook(target: *const c_void, detour: *const c_void) -> bool {
-        unsafe {
-            let mut h = Hook {
-                target: target as *mut c_void,
-                detour: detour as *mut c_void,
-                original: null_mut(),
-            };
+        let mut targets = TARGETS.lock();
+        let mut h = Hook {
+            target: AtomicPtr::new(target as *mut c_void),
+            detour: AtomicPtr::new(detour as *mut c_void),
+            original: AtomicPtr::new(null_mut()),
+        };
 
-            if minhook_sys::MH_CreateHook(h.target, h.detour, &mut h.original as *mut *mut c_void)
-                == 0
+        unsafe {
+            if minhook_sys::MH_CreateHook(
+                h.target.load(Ordering::SeqCst),
+                h.detour.load(Ordering::SeqCst),
+                &mut h.original as *mut AtomicPtr<c_void> as *mut *mut c_void,
+            ) == 0
             {
-                minhook_sys::MH_EnableHook(h.target);
-                TARGETS.push_back(h);
+                minhook_sys::MH_EnableHook(h.target.load(Ordering::SeqCst));
+                targets.push_back(h);
                 true
             } else {
                 false
@@ -60,7 +61,7 @@ impl Hook {
 pub fn initialize_minhook() -> anyhow::Result<(), String> {
     unsafe {
         if minhook_sys::MH_Initialize() != 0 {
-            return Err("Failed to initialize MinHook".to_string());
+            return Err("Failed to initialize MinHook".to_owned());
         }
 
         println!("MinHook initialized successfully");

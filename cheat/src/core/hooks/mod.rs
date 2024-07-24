@@ -41,14 +41,14 @@ extern "system" fn hk_resize_buffers(
 
     let mut renderer = render::dx11::DX11
         .get()
-        .expect(&"dx11 renderer is not initialized while resizing buffers")
+        .expect("dx11 renderer is not initialized while resizing buffers")
         .lock();
 
     renderer
         .resize_buffers(&swapchain, || {
             original_fn(swapchain.clone(), buffer_count, width, height, new_format, swapchain_flags)
         })
-        .expect(&"could not resize buffers")
+        .expect("could not resize buffers")
 }
 
 unsafe extern "system" fn hk_create_move(
