@@ -1,5 +1,5 @@
 # CS2 Internal Cheat Base ![CS2](https://img.shields.io/badge/game-CS2-blue) ![LIC](https://img.shields.io/github/license/W1lliam1337/digital-sdk) ![LANG](https://img.shields.io/badge/language-rust-orange)
-![App menu](https://i.imgur.com/yEG960q.png)
+![App menu](https://i.imgur.com/LBKe37u.png)
 
 ## Overview
 CS2 Internal Cheat Base is a Rust-based internal cheat framework for Counter-Strike 2 (CS2). Designed with modularity and performance in mind, this project provides a solid foundation for developing various cheat features. The framework supports dynamic interface access and module management, making it an ideal starting point for internal cheat development.
