@@ -2,12 +2,12 @@ use crate::common;
 use common::*;
 
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub struct Hook {
-    target: *mut c_void,
-    detour: *mut c_void,
-    original: *mut c_void,
+    target: Arc<Mutex<*mut c_void>>,
+    detour: Arc<Mutex<*mut c_void>>,
+    original: Arc<Mutex<*mut c_void>>,
 }
 
 lazy_static::lazy_static! {
@@ -23,23 +23,26 @@ impl Hook {
         R: From<*mut c_void>,
     {
         let targets = TARGETS.lock().unwrap();
-        let it = targets.iter().find(|hook| hook.detour == func());
-        it.map(|hook| R::from(hook.original))
+        let it = targets.iter().find(|hook| *hook.detour.lock().unwrap() == func());
+        it.map(|hook| R::from(*hook.original.lock().unwrap()))
     }
 
     pub fn hook(target: *const c_void, detour: *const c_void) -> bool {
         let mut targets = TARGETS.lock().unwrap();
-        let mut h = Hook {
-            target: target as *mut c_void,
-            detour: detour as *mut c_void,
-            original: std::ptr::null_mut(),
+        let h = Hook {
+            target: Arc::new(Mutex::new(target as *mut c_void)),
+            detour: Arc::new(Mutex::new(detour as *mut c_void)),
+            original: Arc::new(Mutex::new(std::ptr::null_mut())),
         };
 
         unsafe {
-            if minhook_sys::MH_CreateHook(h.target, h.detour, &mut h.original as *mut *mut c_void)
-                == 0
+            if minhook_sys::MH_CreateHook(
+                *h.target.lock().unwrap(),
+                *h.detour.lock().unwrap(),
+                &mut *h.original.lock().unwrap() as *mut *mut c_void,
+            ) == 0
             {
-                minhook_sys::MH_EnableHook(h.target);
+                minhook_sys::MH_EnableHook(*h.target.lock().unwrap());
                 targets.push_back(h);
                 true
             } else {
