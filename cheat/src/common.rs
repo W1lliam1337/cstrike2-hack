@@ -1,4 +1,3 @@
-pub use std::ptr::null_mut;
 pub use std::{
     ffi::{c_char, c_int, c_void, CString},
     mem::transmute,
@@ -8,6 +7,7 @@ pub use std::{
 };
 
 pub use parking_lot::Mutex;
+pub use std::ptr::{null_mut, from_mut};
 
 /// A macro to cast a raw pointer to a specific type.
 ///

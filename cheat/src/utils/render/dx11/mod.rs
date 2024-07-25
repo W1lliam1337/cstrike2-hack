@@ -2,7 +2,8 @@ use crate::{
     common,
     core::{settings, ui},
 };
-use common::*;
+
+use common::{Mutex, OnceLock};
 
 use anyhow::Context;
 use egui_directx11::DirectX11Renderer;
@@ -53,6 +54,10 @@ fn create_swapchain(window: HWND) -> anyhow::Result<IDXGISwapChain> {
     let mut device = None;
     let mut swapchain: Option<IDXGISwapChain> = None;
 
+    // SAFETY:
+    // - The pointers passed to `D3D11CreateDeviceAndSwapChain` must be valid and correctly set up.
+    // - All parameters should be properly initialized before calling this function.
+    // - Proper error handling is in place to manage any issues from the FFI call.
     unsafe {
         D3D11CreateDeviceAndSwapChain(
             None,
@@ -67,7 +72,7 @@ fn create_swapchain(window: HWND) -> anyhow::Result<IDXGISwapChain> {
             None,
             None,
         )
-        .context("D3D11CreateDeviceAndSwapChain failed")?
+        .context("D3D11CreateDeviceAndSwapChain failed")?;
     };
 
     swapchain.context("could not create d3d11 swapchain")
@@ -84,9 +89,18 @@ fn create_swapchain(window: HWND) -> anyhow::Result<IDXGISwapChain> {
 ///
 /// * `swapchain`: A reference to the DirectX 11 swap chain used for rendering.
 ///
+/// # Panics
+///
+/// This function will panic if:
+/// - The DirectX 11 renderer could not be initialized (`expect("could not create dx11 renderer")`).
+/// - The `win32::INPUT` is not initialized (`expect("win32::INPUT is not initialized")`).
+/// - The input collection failed (`expect("could not collect input")`).
+/// - An error occurs during the `renderer.paint` call (`eprintln!("Rendering error: {e}")`).
+///
 /// # Return
 ///
 /// This function does not return a value.
+#[inline]
 pub fn init_from_swapchain(swapchain: &IDXGISwapChain) {
     let mut renderer = DX11
         .get_or_init(|| {
@@ -106,19 +120,19 @@ pub fn init_from_swapchain(swapchain: &IDXGISwapChain) {
 
     let mut settings = settings::SETTINGS.lock();
 
-    if let Err(e) = renderer.paint(&swapchain, &mut settings, input, |ctx, settings| {
-        let Some(fonts) = &*fonts::FONTS.lock() else {
-            eprintln!("Fonts are not set up");
-            return;
-        };
-
-        ctx.set_fonts(fonts.clone()); // retarded
-
-        ctx.tessellation_options_mut(|options| {
-            options.feathering = false;
-        });
-
-        ui::draw_menu(ctx, settings);
+    if let Err(e) = renderer.paint(swapchain, &mut settings, input, |ctx, settings| {
+        match fonts::FONTS.lock().as_ref() {
+            Some(fonts) => {
+                ctx.set_fonts(fonts.clone());
+                ctx.tessellation_options_mut(|options| {
+                    options.feathering = false;
+                });
+                ui::draw_menu(ctx, settings);
+            }
+            None => {
+                eprintln!("Fonts are not set up");
+            }
+        }
     }) {
         eprintln!("Rendering error: {e}");
     }

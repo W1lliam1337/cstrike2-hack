@@ -28,6 +28,7 @@ use windows::core::{PCSTR, PCWSTR};
 /// Returns a raw pointer to the module handle if the module is found. If the module is not found,
 /// the function returns `null`. The returned handle can be used with other Windows API functions to
 /// interact with the module.
+#[must_use]
 pub fn get_module_handle(module_name: &str) -> Option<HMODULE> {
     let module_name_wide: Vec<u16> = module_name.encode_utf16().chain(std::iter::once(0)).collect();
     unsafe { GetModuleHandleW(PCWSTR(module_name_wide.as_ptr())).ok() }
@@ -76,6 +77,7 @@ pub fn get_proc_address(module_handle: HMODULE, proc_name: &str) -> Option<*mut 
 /// and entry point of the module.
 ///
 /// Returns `None` if the module information cannot be obtained or if an error occurs.
+#[must_use]
 pub fn get_module_info(module_handle: HMODULE) -> Option<MODULEINFO> {
     let mut module_info =
         MODULEINFO { lpBaseOfDll: null_mut(), SizeOfImage: 0, EntryPoint: null_mut() };
@@ -112,6 +114,7 @@ pub fn get_module_info(module_handle: HMODULE) -> Option<MODULEINFO> {
 ///
 /// Returns `Some(address)` if the pattern is found, where `address` is the memory address of the first occurrence.
 /// Returns `None` if the pattern is not found or if an error occurs during pattern parsing.
+#[must_use]
 pub fn pattern_search(module_handle: HMODULE, pattern: &str) -> Option<usize> {
     // Split the pattern string into bytes and handle wildcards
     let pattern_bytes: Result<Vec<Option<u8>>, _> =

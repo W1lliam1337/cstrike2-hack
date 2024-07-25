@@ -20,6 +20,7 @@ pub struct Settings {
 }
 
 impl Default for Settings {
+    #[inline]
     fn default() -> Self {
         Self { tab: Tab::Visuals, visuals: Default::default(), misc: Default::default() }
     }
@@ -40,6 +41,7 @@ pub struct EspSettings {
 }
 
 impl Default for EspSettings {
+    #[inline]
     fn default() -> Self {
         Self {
             enabled: true,

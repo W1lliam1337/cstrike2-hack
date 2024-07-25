@@ -3,7 +3,7 @@ pub mod core;
 pub mod cs2;
 pub mod utils;
 
-use common::*;
+use common::{c_void, null_mut, Once};
 
 use windows::Win32::{
     Foundation::HMODULE,
@@ -28,7 +28,7 @@ extern "system" fn thread_startup(_: *mut c_void) -> u32 {
         Err(e) => {
             eprint!("Init failed: {e}");
         }
-        Ok(_) => {
+        Ok(()) => {
             println!("Initialized cheat successfully!");
         }
     }
@@ -44,14 +44,19 @@ extern "system" fn thread_startup(_: *mut c_void) -> u32 {
 /// - `module`: A pointer to the module handle for the DLL.
 /// - `reason_for_call`: An unsigned integer representing the reason for calling the function.
 ///   The possible values are:
-///   - `1`: DLL_PROCESS_ATTACH: The DLL is being loaded into a process.
-///   - `0`: DLL_PROCESS_DETACH: The DLL is being unloaded from a process.
+///   - `1`: `DLL_PROCESS_ATTACH`: The DLL is being loaded into a process.
+///   - `0`: `DLL_PROCESS_DETACH`: The DLL is being unloaded from a process.
 /// - `_reserved`: A pointer to reserved data. This parameter is not used and should be ignored.
 ///
 /// # Return Value
 ///
 /// The function should return a boolean value indicating success. If the function returns `1`, the DLL load is
 /// successful. If the function returns `0`, the DLL load is unsuccessful.
+///
+/// # Panics
+///
+/// This function will panic if creating a thread fails.
+#[inline]
 #[export_name = "DllMain"]
 pub extern "system" fn dll_main(
     _module: HMODULE,
@@ -60,15 +65,20 @@ pub extern "system" fn dll_main(
 ) -> i32 {
     match reason_for_call {
         1 => {
+            /// A static initializer to ensure one-time initialization.
             static INIT: Once = Once::new();
 
             INIT.call_once(|| {
                 // Create a thread to initialize the cheat
+                // SAFETY: AllocConsole is unsafe because it involves system-level operations that can fail.
                 unsafe {
                     if AllocConsole().is_err() {
                         return;
                     }
+                }
 
+                // SAFETY: CreateThread is unsafe because it involves creating a new thread at the OS level.
+                match unsafe {
                     CreateThread(
                         None,                     // Security attributes
                         0,                        // Stack size
@@ -77,7 +87,13 @@ pub extern "system" fn dll_main(
                         THREAD_CREATION_FLAGS(0), // Creation flags
                         None,                     // Thread identifier
                     )
-                    .expect("Failed to create thread");
+                } {
+                    Ok(_) => {
+                        println!("Successfully created a new thread");
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to create thread: {:?}", e);
+                    }
                 }
             });
         }
