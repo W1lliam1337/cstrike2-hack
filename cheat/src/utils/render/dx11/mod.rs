@@ -105,7 +105,7 @@ pub fn init_from_swapchain(swapchain: &IDXGISwapChain) {
     let mut renderer = DX11
         .get_or_init(|| {
             Mutex::new(
-                DirectX11Renderer::init_from_swapchain(&swapchain, egui::Context::default())
+                DirectX11Renderer::init_from_swapchain(swapchain, egui::Context::default())
                     .expect("could not create dx11 renderer"),
             )
         })

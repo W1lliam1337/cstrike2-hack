@@ -39,6 +39,7 @@ pub fn setup(window: HWND) -> anyhow::Result<()> {
     // - `wndproc_hk` is a valid function pointer with the correct signature.
     // - `SetWindowLongPtrA` expects a pointer to a window procedure, which is provided as `wndproc_hk` cast to `isize`.
     // - The returned `old_proc_ptr` from `SetWindowLongPtrA` is a valid pointer or `0` if the function fails.
+    #[allow(clippy::fn_to_numeric_cast)]
     let old_proc_ptr = unsafe { SetWindowLongPtrA(window, GWLP_WNDPROC, wndproc_hk as isize) };
 
     // SAFETY: The cast to `isize` and back to a function pointer is managed by the API and is safe here.
