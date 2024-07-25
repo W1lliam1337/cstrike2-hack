@@ -51,9 +51,9 @@ unsafe extern "system" fn enum_window(window: HWND, lparam: LPARAM) -> BOOL {
         return TRUE;
     }
 
-    let lparam = std::mem::transmute::<LPARAM, *mut HWND>(lparam);
+    let lparam_ptr = lparam.0 as *mut HWND;
 
-    *lparam = window;
+    std::ptr::write(lparam_ptr, window);
 
     FALSE
 }
