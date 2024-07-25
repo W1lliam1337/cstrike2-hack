@@ -127,8 +127,8 @@ fn visuals_tab(ui: &mut Ui, settings: &mut VisualsSettings) {
 pub fn should_block_input(msg: u32) -> bool {
     let menu_visible = SHOW_MENU.load(Ordering::SeqCst);
 
-    matches!(menu_visible, true if {
-        matches!(
+    menu_visible
+        && matches!(
             msg,
             WM_MOUSEMOVE
                 | WM_NCMOUSEMOVE
@@ -157,5 +157,4 @@ pub fn should_block_input(msg: u32) -> bool {
                 | WM_SETCURSOR
                 | WM_DEVICECHANGE
         )
-    })
 }
