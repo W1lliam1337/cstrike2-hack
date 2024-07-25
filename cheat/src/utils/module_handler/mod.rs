@@ -1,3 +1,5 @@
+use std::num::ParseIntError;
+
 use crate::common;
 use common::*;
 
@@ -28,34 +30,52 @@ use windows::core::{PCSTR, PCWSTR};
 /// Returns a raw pointer to the module handle if the module is found. If the module is not found,
 /// the function returns `null`. The returned handle can be used with other Windows API functions to
 /// interact with the module.
+#[inline]
 #[must_use]
 pub fn get_module_handle(module_name: &str) -> Option<HMODULE> {
+    // Convert the module name to a UTF-16 string with a null terminator
     let module_name_wide: Vec<u16> = module_name.encode_utf16().chain(std::iter::once(0)).collect();
+
+    // SAFETY: The `module_name_wide` vector is valid and null-terminated. The call to `GetModuleHandleW`
+    // expects a valid UTF-16 string and will return a handle to the module if it is loaded.
+    // The result of `GetModuleHandleW` is converted to an `Option` using `.ok()`, handling `null` properly.
     unsafe { GetModuleHandleW(PCWSTR(module_name_wide.as_ptr())).ok() }
 }
 
-/// Retrieves the address of a specified procedure within a module.
-///
-/// This function uses the `GetProcAddress` function from the Windows API to obtain the address of a
-/// specified procedure within a module. The procedure address can then be used to call the procedure
-/// directly from Rust code.
+/// Retrieves the address of an exported function or variable from the specified module.
 ///
 /// # Parameters
 ///
-/// * `module_handle`: A raw pointer to the module's handle. This can be obtained using the
-///   `get_module_handle` function.
-/// * `proc_name`: A string representing the name of the procedure to retrieve.
+/// * `module_handle`: A handle to the module containing the function or variable.
+/// * `proc_name`: The name of the function or variable to retrieve.
 ///
-/// # Return Value
+/// # Returns
 ///
-/// Returns a raw pointer to the specified procedure. This pointer can be safely cast to the desired
-/// function signature and used to call the procedure directly.
+/// * `Option<*mut c_void>`: The address of the function or variable if found, otherwise `None`.
 ///
-/// If the specified procedure is not found within the module, the function returns `null`.
+/// # Panics
+///
+/// This function may panic if:
+///
+/// * `proc_name` contains a null byte or other invalid characters for a C string, which would cause
+///   `CString::new` to panic.
+///
+/// # Note
+///
+/// The return value should be checked before use to avoid dereferencing null pointers.
+#[inline]
+#[must_use]
 pub fn get_proc_address(module_handle: HMODULE, proc_name: &str) -> Option<*mut c_void> {
-    let proc_name_cstr = CString::new(proc_name).expect("CString::new failed");
+    let proc_name_cstr = match CString::new(proc_name) {
+        Ok(cstr) => cstr,
+        Err(_) => return None, // Return None if proc_name is invalid
+    };
+
+    // SAFETY: The caller must ensure that `module_handle` is a valid module handle and
+    // `proc_name` is a valid function name. The external `GetProcAddress` function is
+    // used to retrieve the function address. The result is cast to `*mut c_void`.
     unsafe {
-        GetProcAddress(module_handle, PCSTR(proc_name_cstr.as_ptr() as *const u8))
+        GetProcAddress(module_handle, PCSTR(proc_name_cstr.as_ptr().cast::<u8>()))
             .map(|addr| addr as *mut _)
     }
 }
@@ -77,47 +97,64 @@ pub fn get_proc_address(module_handle: HMODULE, proc_name: &str) -> Option<*mut 
 /// and entry point of the module.
 ///
 /// Returns `None` if the module information cannot be obtained or if an error occurs.
+#[inline]
 #[must_use]
 pub fn get_module_info(module_handle: HMODULE) -> Option<MODULEINFO> {
     let mut module_info =
         MODULEINFO { lpBaseOfDll: null_mut(), SizeOfImage: 0, EntryPoint: null_mut() };
 
-    if unsafe {
+    let size_of_module_info = match u32::try_from(size_of::<MODULEINFO>()) {
+        Ok(size) => size,
+        Err(_) => return None, // Return None if size conversion fails
+    };
+
+    // SAFETY: The caller must ensure that `module_handle` is a valid handle to a loaded module.
+    unsafe {
         GetModuleInformation(
             GetCurrentProcess(),
             module_handle,
             &mut module_info,
-            std::mem::size_of::<MODULEINFO>() as u32,
+            size_of_module_info,
         )
-    }
-    .is_ok()
-    {
-        Some(module_info)
-    } else {
-        None
+        .is_ok()
+        .then_some(module_info) // Use `then_some` to simplify the return logic
     }
 }
 
-/// Searches for a pattern within a module's memory.
+/// Searches for a pattern within the memory of a specified module.
 ///
-/// This function takes a module handle and a pattern string as input.
-/// The pattern string consists of hexadecimal bytes separated by spaces,
-/// with "??" representing a wildcard that matches any byte.
-/// The function searches for the pattern within the module's memory and returns the address of the first occurrence.
+/// This function uses a simple byte-by-byte comparison to find a pattern within the memory of a module.
+/// The pattern is specified as a space-separated sequence of hexadecimal bytes, with "??" representing
+/// a wildcard that matches any byte.
 ///
 /// # Parameters
 ///
-/// * `module_handle`: A raw pointer to the module's handle. This can be obtained using the `get_module_handle` function.
-/// * `pattern`: A string representing the pattern to search for.
+/// * `module_handle`: A handle to the module within which to search for the pattern.
+///   This can be obtained using the `get_module_handle` function.
+///
+/// * `pattern`: A string representing the pattern to search for. The pattern should be a space-separated
+///   sequence of hexadecimal bytes, with "??" representing a wildcard.
 ///
 /// # Return Value
 ///
-/// Returns `Some(address)` if the pattern is found, where `address` is the memory address of the first occurrence.
-/// Returns `None` if the pattern is not found or if an error occurs during pattern parsing.
+/// Returns `Some(address_offset)` if the pattern is found within the module's memory.
+/// The `address_offset` is the memory address of the first byte of the pattern, relative to the base
+/// address of the module.
+///
+/// Returns `None` if the pattern is not found within the module's memory.
+///
+/// # Panics
+///
+/// This function may panic if:
+///
+/// * The `pattern` string contains invalid hexadecimal characters.
+/// * The `pattern` string contains a null byte or other invalid characters for a C string.
+/// * The `address_offset` calculation overflows.
+#[inline]
 #[must_use]
 pub fn pattern_search(module_handle: HMODULE, pattern: &str) -> Option<usize> {
-    // Split the pattern string into bytes and handle wildcards
-    let pattern_bytes: Result<Vec<Option<u8>>, _> =
+    // Parse the pattern string into bytes and handle wildcards
+    let parsed_pattern_bytes: Result<Vec<Option<u8>>, ParseIntError> =
         pattern
             .split_whitespace()
             .map(|byte_str| {
@@ -129,60 +166,108 @@ pub fn pattern_search(module_handle: HMODULE, pattern: &str) -> Option<usize> {
             })
             .collect();
 
-    let pattern_bytes = match pattern_bytes {
+    // Handle parsing errors and continue if successful
+    let pattern_bytes = match parsed_pattern_bytes {
         Ok(bytes) => bytes,
         Err(e) => {
-            eprintln!("Failed to parse pattern: {}", e);
+            eprintln!("Failed to parse pattern: {e}");
             return None;
         }
     };
 
+    // Retrieve module information
     let module_info = match get_module_info(module_handle) {
         Some(info) => info,
         None => return None,
     };
 
-    let base_address = module_info.lpBaseOfDll as *const u8;
-    let size = module_info.SizeOfImage as usize;
+    let base_address = module_info.lpBaseOfDll;
+    let size = match usize::try_from(module_info.SizeOfImage) {
+        Ok(size) => size,
+        Err(_) => return None,
+    };
 
-    unsafe {
-        let module_memory = slice::from_raw_parts(base_address, size);
+    // SAFETY: Convert base_address to a raw pointer for memory access
+    let module_memory = unsafe {
+        // Ensure the pointer and size are valid before creating a slice
+        slice::from_raw_parts(base_address as *const u8, size)
+    };
 
-        for i in 0..module_memory.len() - pattern_bytes.len() {
-            if pattern_bytes
-                .iter()
-                .enumerate()
-                .all(|(j, &b)| b.map_or(true, |b| module_memory[i + j] == b))
-            {
-                return Some(base_address.add(i) as usize);
-            }
+    for i in 0..module_memory.len().saturating_sub(pattern_bytes.len()) {
+        if pattern_bytes
+            .iter()
+            .enumerate()
+            .all(|(j, &b)| b.map_or(true, |b| module_memory[i + j] == b))
+        {
+            let address_offset = (base_address as usize)
+                .checked_add(i)
+                .ok_or_else(|| {
+                    eprintln!("Address calculation overflowed");
+                    None::<usize>
+                })
+                .expect("Failed to calculate address");
+
+            return Some(address_offset);
         }
     }
 
     None
 }
 
-/// Retrieves the address of a specific interface within a module.
+/// Retrieves a pointer to a specific interface from a module.
+///
+/// This function uses the `CreateInterface` function from the specified module to obtain a pointer to
+/// a requested interface. The interface is identified by its name, which is passed as a parameter to
+/// the function.
 ///
 /// # Parameters
 ///
-/// * `module_handle`: A raw pointer to the module's handle. This can be obtained using the `get_module_handle` function.
+/// * `module_handle`: A handle to the module containing the `CreateInterface` function.
+///   This can be obtained using the `get_module_handle` function.
+///
 /// * `interface_name`: A string representing the name of the interface to retrieve.
+///   The name should match the name used by the module to identify the interface.
 ///
-/// # Return Value
+/// # Returns
 ///
-/// Returns a raw pointer to the interface if found, or `null` if the interface is not found.
-/// The returned pointer can be safely cast to the desired interface type.
+/// * `Some(interface_ptr)`: If the interface is successfully retrieved. The `interface_ptr` is a raw pointer
+///   to the requested interface.
+///
+/// * `None`: If the interface cannot be retrieved or if an error occurs.
+///
+/// # Panics
+///
+/// This function may panic if:
+///
+/// * `get_proc_address` returns `None`, which will cause `expect` to panic.
+/// * `CString::new` fails to create a C-style string, which will also cause `expect` to panic.
+///
+/// # Note
+///
+/// The returned pointer is raw and should be used with caution. Ensure that the pointer is valid before
+/// dereferencing or using it.
+#[inline]
+#[must_use]
 pub fn get_interface(module_handle: HMODULE, interface_name: &str) -> Option<*const usize> {
-    type CreateInterfaceFn = unsafe extern "C" fn(*const c_char, *const c_int) -> *const c_void;
-
-    let function: CreateInterfaceFn = unsafe {
-        transmute(
-            get_proc_address(module_handle, "CreateInterface")
-                .expect("Failed to get function address"),
-        )
+    // SAFETY: We assume that `get_proc_address` returns a valid function pointer.
+    let function: unsafe extern "C" fn(*const c_char, *const c_int) -> *const c_void = unsafe {
+        get_proc_address(module_handle, "CreateInterface")
+            .map(|addr| transmute(addr))
+            .ok_or_else(|| {
+                eprintln!("Failed to get function address for CreateInterface");
+                None::<usize>
+            })
+            .expect("Failed to cast CreateInterface to a function pointer")
     };
-    let interface_name_cstr = CString::new(interface_name).expect("CString::new failed");
 
+    let interface_name_cstr = match CString::new(interface_name) {
+        Ok(cstr) => cstr,
+        Err(_) => {
+            eprintln!("Failed to create CString from interface_name");
+            return None;
+        }
+    };
+
+    // SAFETY: We assume that `function` is a valid function pointer and `interface_name_cstr` is valid.
     Some(unsafe { function(interface_name_cstr.as_ptr(), null_mut()) as *const usize })
 }
