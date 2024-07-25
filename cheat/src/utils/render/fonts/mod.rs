@@ -4,6 +4,15 @@ use parking_lot::Mutex;
 
 pub static FONTS: Mutex<Option<FontDefinitions>> = Mutex::new(None);
 
+/// This function sets up the default fonts for the application.
+/// It initializes a `FontDefinitions` struct, adds a custom font "Tahoma" from a file,
+/// and sets it as the default proportional and monospace font.
+///
+/// # Errors
+///
+/// This function returns an `anyhow::Result<()>`, which means it can return an error
+/// of type `anyhow::Error` if any of the operations fail.
+#[inline]
 pub fn setup() -> anyhow::Result<()> {
     let mut fonts = FontDefinitions::default();
 

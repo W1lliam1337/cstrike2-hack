@@ -10,8 +10,8 @@ unsafe impl Send for Interface {}
 impl Interface {
     fn get_method(&self, index: isize) -> *const usize {
         let vtable = unsafe { *(self.interface_pointer) as *const *const usize };
-        let vfunc = unsafe { *vtable.offset(index) };
-        vfunc
+
+        unsafe { *vtable.offset(index) }
     }
 
     pub fn new(interface_pointer: *const usize) -> Self {
@@ -20,7 +20,7 @@ impl Interface {
 
     pub fn is_in_game(&self) -> bool {
         let vfunc = unsafe {
-            transmute::<_, unsafe extern "fastcall" fn(thisptr: *const usize) -> bool>(
+            transmute::<*const usize, unsafe extern "fastcall" fn(*const usize) -> bool>(
                 self.get_method(35),
             )
         };

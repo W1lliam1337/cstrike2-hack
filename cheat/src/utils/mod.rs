@@ -51,7 +51,7 @@ unsafe extern "system" fn enum_window(window: HWND, lparam: LPARAM) -> BOOL {
         return TRUE;
     }
 
-    let lparam = std::mem::transmute::<_, *mut HWND>(lparam);
+    let lparam = std::mem::transmute::<LPARAM, *mut HWND>(lparam);
 
     *lparam = window;
 
@@ -71,7 +71,9 @@ unsafe extern "system" fn enum_window(window: HWND, lparam: LPARAM) -> BOOL {
 pub fn find_window() -> Option<HWND> {
     let mut hwnd: HWND = Default::default();
 
-    let _ = unsafe { EnumWindows(Some(enum_window), LPARAM(&mut hwnd as *mut HWND as isize)) };
+    let _ = unsafe {
+        EnumWindows(Some(enum_window), LPARAM(std::ptr::from_mut::<HWND>(&mut hwnd) as isize))
+    };
 
     if hwnd.0 == 0 {
         None

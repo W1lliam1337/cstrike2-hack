@@ -1,77 +1,166 @@
 use crate::{common, utils::module_handler};
-use anyhow::bail;
-use common::*;
+use common::{c_void, Mutex};
 
 use once_cell::sync::OnceCell;
 use windows::Win32::Foundation::HMODULE;
 
+/// A `Module` represents a dynamically loaded module.
+///
+/// This struct provides methods to interact with the module, such as finding sequences of bytes,
+/// retrieving exported functions, and obtaining interfaces.
+///
+/// # Fields
+/// - `name`: The name of the module.
+/// - `handle`: The handle to the loaded module.
 #[derive(Clone, Debug)]
 pub struct Module {
+    /// The name of the module.
     name: &'static str,
+
+    /// The handle to the loaded module.
     handle: HMODULE,
 }
 
 impl Module {
+    /// Creates a new `Module` by loading the module with the given name.
+    ///
+    /// # Parameters
+    /// - `name`: The name of the module to load.
+    ///
+    /// # Returns
+    /// A new `Module` instance.
+    ///
+    /// # Panics
+    /// This function will panic if the module cannot be loaded.
+    /// The panic occurs if `module_handler::get_module_handle(name)` returns `None`.
+    ///
+    /// # Examples
+    /// ```
+    /// let module = Module::new("example.dll");
+    /// ```
+    #[must_use]
+    #[inline]
     pub fn new(name: &'static str) -> Self {
         let handle = module_handler::get_module_handle(name).expect("Failed to get module handle");
-        Module { name, handle }
+        Self { name, handle }
     }
 
+    /// Searches for a sequence of bytes in the module.
+    ///
+    /// # Parameters
+    /// - `pattern`: The byte pattern to search for.
+    ///
+    /// # Returns
+    /// The offset of the pattern if found, otherwise `None`.
+    ///
+    /// # Examples
+    /// ```
+    /// let offset = module.find_seq_of_bytes("pattern").unwrap_or(0);
+    /// ```
+    #[must_use]
+    #[inline]
     pub fn find_seq_of_bytes(&self, pattern: &str) -> Option<usize> {
         module_handler::pattern_search(self.handle, pattern)
     }
 
+    /// Retrieves the address of an exported function from the module.
+    ///
+    /// # Parameters
+    /// - `function_name`: The name of the function to retrieve.
+    ///
+    /// # Returns
+    /// A pointer to the function if found, otherwise `None`.
+    ///
+    /// # Examples
+    /// ```
+    /// let func_ptr = module.get_export("function_name");
+    /// ```
+    #[must_use]
+    #[inline]
     pub fn get_export(&self, function_name: &str) -> Option<*mut c_void> {
         module_handler::get_proc_address(self.handle, function_name)
     }
 
+    /// Retrieves an interface from the module.
+    ///
+    /// # Parameters
+    /// - `interface_name`: The name of the interface to retrieve.
+    ///
+    /// # Returns
+    /// A pointer to the interface if found, otherwise `None`.
+    ///
+    /// # Examples
+    /// ```
+    /// let interface_ptr = module.get_interface("interface_name");
+    /// ```
+    #[must_use]
+    #[inline]
     pub fn get_interface(&self, interface_name: &str) -> Option<*const usize> {
         module_handler::get_interface(self.handle, interface_name)
     }
 
-    pub fn name(&self) -> &str {
+    /// Returns the name of the module.
+    ///
+    /// # Returns
+    /// The name of the module.
+    ///
+    /// # Examples
+    /// ```
+    /// let module_name = module.name();
+    /// ```
+    #[must_use]
+    #[inline]
+    pub const fn name(&self) -> &str {
         self.name
     }
 }
 
+/// A global static variable holding the list of initialized modules.
+///
+/// This variable is initialized only once and protected by a `Mutex` to ensure thread safety.
 static MODULES: OnceCell<Mutex<Vec<Module>>> = OnceCell::new();
 
-/// Initializes the specified modules and stores them in a static variable.
+/// Initializes the global `MODULES` with the provided module names.
 ///
-/// # Arguments
+/// # Parameters
+/// - `names`: A slice of module names to initialize.
 ///
-/// * `names` - A slice of module names (without the ".dll" extension) to be initialized.
+/// # Returns
+/// A `Result` indicating success or failure. If the initialization fails, it returns an error.
 ///
 /// # Errors
+/// - Returns an error if modules are already initialized.
+/// - Panics if setting the global `MODULES` fails.
 ///
-/// Returns an error if any of the following conditions are met:
-/// - The modules have already been initialized.
-/// - Failed to get the module handle for any of the specified modules.
-/// - Failed to initialize the `MODULES` static variable.
+/// # Panics
+/// This function will panic if `MODULES.set(...)` fails or if `MODULES.get()` returns `None`
+/// while trying to access the modules. This can happen if the modules were not properly initialized.
 ///
-/// # Example
-///
-/// ```rust
-/// use std::error::Error;
-///
-/// fn main() -> Result<(), Box<dyn Error>> {
-///     initialize_modules(&["client", "engine2", "gameoverlayrenderer64"])?;
-///     // Use the initialized modules here
-///     Ok(())
+/// # Examples
+/// ```no_run
+/// let result = initialize_modules(&["module1.dll", "module2.dll"]);
+/// match result {
+///     Ok(_) => println!("Modules initialized successfully"),
+///     Err(e) => eprintln!("Failed to initialize modules: {:?}", e),
 /// }
 /// ```
+#[inline]
 pub fn initialize_modules(names: &[&'static str]) -> anyhow::Result<()> {
-    if !MODULES.get().is_none() {
-        bail!("Modules are already initialized");
+    if MODULES.get().is_some() {
+        return Err(anyhow::anyhow!("Modules are already initialized"));
     }
 
     let modules = names.iter().map(|&name| Module::new(name)).collect::<Vec<_>>();
-    MODULES.set(Mutex::new(modules)).expect("Failed to initialize MODULES");
+    match MODULES.set(Mutex::new(modules)) {
+        Ok(()) => (),
+        Err(e) => return Err(anyhow::anyhow!("Failed to initialize MODULES: {:?}", e)),
+    }
 
-    let modules = MODULES.get().expect("MODULES should be initialized").lock();
-    Ok(for module in modules.iter() {
+    let modules_guard = MODULES.get().expect("MODULES should be initialized").lock();
+    for module in modules_guard.iter() {
         println!("Initialized module: {} {:p}", module.name, module.handle.0 as *const c_void);
-    })
+    }
+    Ok(())
 }
 
 /// This macro generates accessor functions for static instances of the `Module` struct.
@@ -83,24 +172,21 @@ pub fn initialize_modules(names: &[&'static str]) -> anyhow::Result<()> {
 ///
 /// # Example
 ///
-/// ```rust
-/// define_module_accessors!(client, engine2, gameoverlayrenderer64);
-///
-/// fn main() {
-///     let client_module = client();
-///     let engine2_module = engine2();
-///     let gameoverlayrenderer64_module = gameoverlayrenderer64();
-/// }
-/// ```
 macro_rules! define_module_accessors {
     ($($name:ident),*) => {
         $(
+            /// Accessor function for the module.
+            ///
+            /// # Panics
+            /// Panics if the module is not initialized or if the module is not found.
+            #[inline]
             pub fn $name() -> &'static Module {
-                let modules = MODULES.get().expect(concat!(stringify!($name), " is not initialized")).lock();
-                let module = modules.iter()
-                    .find(|module| module.name() == concat!(stringify!($name), ".dll"))
+                let module_name = concat!(stringify!($name), ".dll");
+                let modules_guard = MODULES.get().expect("Modules are not initialized").lock();
+                let module = modules_guard.iter()
+                    .find(|module| module.name() == module_name)
                     .unwrap_or_else(|| {
-                        panic!("Module {} is not found", stringify!($name));
+                        panic!("Module {} is not found", module_name);
                     });
 
                 Box::leak(Box::new(module.clone()))
