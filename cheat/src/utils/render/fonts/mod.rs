@@ -12,7 +12,6 @@ pub static FONTS: Mutex<Option<FontDefinitions>> = Mutex::new(None);
 ///
 /// This function returns an `anyhow::Result<()>`, which means it can return an error
 /// of type `anyhow::Error` if any of the operations fail.
-#[inline]
 pub fn setup() -> anyhow::Result<()> {
     let mut fonts = FontDefinitions::default();
 

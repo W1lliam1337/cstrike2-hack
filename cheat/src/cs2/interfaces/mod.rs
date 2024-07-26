@@ -25,7 +25,7 @@ macro_rules! define_interface {
         paste! {
             static [<INTERFACE_ $name:upper>]: once_cell::sync::Lazy<super::interfaces::$name::Interface> = once_cell::sync::Lazy::new(|| {
                 let interface_ptr = crate::cs2::modules::$module_fn().get_interface($interface_name)
-                    .expect(concat!("Failed to find ", $interface_name));
+                    .expect(concat!("failed to find ", $interface_name));
                 super::interfaces::$name::Interface::new(interface_ptr)
             });
 

@@ -30,8 +30,7 @@ static SHOW_MENU: AtomicBool = AtomicBool::new(true);
 ///
 /// None.
 pub fn toggle_menu() {
-    let current = SHOW_MENU.load(Ordering::SeqCst);
-    SHOW_MENU.store(!current, Ordering::SeqCst);
+    _ = SHOW_MENU.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |show_menu| Some(!show_menu));
 }
 
 /// Checks if the menu is currently visible.

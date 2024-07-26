@@ -5,7 +5,7 @@ use crate::{
     utils::{self, hook_system, render},
 };
 
-use anyhow::bail;
+use anyhow::{bail, Context};
 
 use windows::{
     core::HRESULT,
@@ -61,7 +61,7 @@ unsafe extern "system" fn hk_create_move(
 ) -> u64 {
     get_original_fn!(hk_create_move, original_fn, (*mut f32, u64, i8, u64, u64, u64), u64);
 
-    println!("{}", cs2::interfaces::engine_client().is_in_game());
+    tracing::info!("create move called");
 
     original_fn(a1, a2, a3, a4, a5, a6)
 }
@@ -79,17 +79,25 @@ unsafe extern "system" fn hk_create_move(
 pub fn initialize_hooks() -> anyhow::Result<()> {
     // Initialize MinHook
     if let Err(status) = utils::hook_system::initialize_minhook() {
-        bail!("Failed to initialize MinHook: {}", status);
+        bail!("failed to initialize MinHook: {status}");
     }
 
     // Find the target addresses for the game functions
-    let create_move_target = cs2::modules::client().find_seq_of_bytes("48 8B C4 4C 89 48 20 55");
-    let present_target = cs2::modules::gameoverlayrenderer64().find_seq_of_bytes(
-        "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 56 41 57 48 83 EC 20 41 8B E8",
-    );
-    let resize_buffers_target = cs2::modules::gameoverlayrenderer64().find_seq_of_bytes(
-        "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 30 44",
-    );
+    let create_move_target = cs2::modules::client()
+        .find_seq_of_bytes("48 8B C4 4C 89 48 20 55")
+        .context("failed to find create move pattern")?;
+
+    let present_target = cs2::modules::gameoverlayrenderer64()
+        .find_seq_of_bytes(
+            "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 41 56 41 57 48 83 EC 20 41 8B E8",
+        )
+        .context("failed to find present pattern")?;
+
+    let resize_buffers_target = cs2::modules::gameoverlayrenderer64()
+        .find_seq_of_bytes(
+            "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 30 44",
+        )
+        .context("failed to find resize buffers pattern")?;
 
     // Create hooks for the game functions
     create_hook!(create_move_target, hk_create_move);

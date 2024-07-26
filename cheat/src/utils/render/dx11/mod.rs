@@ -100,7 +100,6 @@ fn create_swapchain(window: HWND) -> anyhow::Result<IDXGISwapChain> {
 /// # Return
 ///
 /// This function does not return a value.
-#[inline]
 pub fn init_from_swapchain(swapchain: &IDXGISwapChain) {
     let mut renderer = DX11
         .get_or_init(|| {
@@ -130,10 +129,10 @@ pub fn init_from_swapchain(swapchain: &IDXGISwapChain) {
                 ui::draw_menu(ctx, settings);
             }
             None => {
-                eprintln!("Fonts are not set up");
+                tracing::warn!("fonts are not set up");
             }
         }
     }) {
-        eprintln!("Rendering error: {e}");
+        tracing::warn!("rendering error: {e}");
     }
 }
