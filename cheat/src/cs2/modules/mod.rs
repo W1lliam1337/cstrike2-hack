@@ -1,4 +1,5 @@
 use crate::{common, utils::module_handler};
+use anyhow::bail;
 use common::{c_void, Mutex};
 
 use once_cell::sync::OnceCell;
@@ -40,7 +41,7 @@ impl Module {
     /// ```
     #[must_use]
     pub fn new(name: &'static str) -> Self {
-        let handle = module_handler::get_module_handle(name).expect("Failed to get module handle");
+        let handle = module_handler::get_module_handle(name).expect("failed to get module handle");
         Self { name, handle }
     }
 
@@ -57,7 +58,7 @@ impl Module {
     /// let offset = module.find_seq_of_bytes("pattern").unwrap_or(0);
     /// ```
     #[must_use]
-    pub fn find_seq_of_bytes(&self, pattern: &str) -> Option<usize> {
+    pub fn find_seq_of_bytes<T>(&self, pattern: &str) -> anyhow::Result<*const T> {
         module_handler::pattern_search(self.handle, pattern)
     }
 
@@ -141,19 +142,29 @@ static MODULES: OnceCell<Mutex<Vec<Module>>> = OnceCell::new();
 /// ```
 pub fn initialize_modules(names: &[&'static str]) -> anyhow::Result<()> {
     if MODULES.get().is_some() {
-        return Err(anyhow::anyhow!("Modules are already initialized"));
+        bail!("modules are already initialized");
     }
 
-    let modules = names.iter().map(|&name| Module::new(name)).collect::<Vec<_>>();
+    let modules = names
+        .iter()
+        .map(|&name| {
+            let module = Module::new(name);
+
+            tracing::info!(
+                "initialized module: {} {:p}",
+                module.name,
+                module.handle.0 as *const c_void
+            );
+
+            module
+        })
+        .collect();
+
     match MODULES.set(Mutex::new(modules)) {
-        Ok(()) => (),
-        Err(e) => return Err(anyhow::anyhow!("Failed to initialize MODULES: {:?}", e)),
+        Ok(_) => {}
+        Err(e) => bail!("failed to initialize MODULES: {e:?}"),
     }
 
-    let modules_guard = MODULES.get().expect("MODULES should be initialized").lock();
-    for module in modules_guard.iter() {
-        println!("Initialized module: {} {:p}", module.name, module.handle.0 as *const c_void);
-    }
     Ok(())
 }
 
@@ -175,11 +186,11 @@ macro_rules! define_module_accessors {
             /// Panics if the module is not initialized or if the module is not found.
             pub fn $name() -> &'static Module {
                 let module_name = concat!(stringify!($name), ".dll");
-                let modules_guard = MODULES.get().expect("Modules are not initialized").lock();
+                let modules_guard = MODULES.get().expect("modules are not initialized").lock();
                 let module = modules_guard.iter()
                     .find(|module| module.name() == module_name)
                     .unwrap_or_else(|| {
-                        panic!("Module {} is not found", module_name);
+                        panic!("module {} is not found", module_name);
                     });
 
                 Box::leak(Box::new(module.clone()))

@@ -27,6 +27,9 @@ egui-directx11 = { path = "../egui/egui-directx11" }
 egui-win32 = { path="../egui/egui-win32" }
 anyhow = "1.0.75"
 parking_lot = "0.12.1"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+thiserror = "1.0.63"
 
 [dependencies.windows]
 version = "0.51.0"

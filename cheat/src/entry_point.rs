@@ -26,10 +26,10 @@ use windows::Win32::{
 extern "system" fn thread_startup(_: *mut c_void) -> u32 {
     match core::bootstrap::initialize() {
         Err(e) => {
-            eprint!("Init failed: {e}");
+            tracing::error!("init failed: {e}");
         }
         Ok(()) => {
-            println!("Initialized cheat successfully!");
+            tracing::info!("initialized cheat successfully!");
         }
     }
 
@@ -88,16 +88,16 @@ pub extern "system" fn dll_main(
                     )
                 } {
                     Ok(_) => {
-                        println!("Successfully created a new thread");
+                        tracing::info!("successfully created a new thread");
                     }
                     Err(e) => {
-                        eprintln!("Failed to create thread: {:?}", e);
+                        tracing::error!("failed to create thread: {:?}", e);
                     }
                 }
             });
         }
         0 => {
-            println!("DLL unloaded");
+            tracing::info!("DLL unloaded");
 
             // TODO: Unload cheat and free resources
         }

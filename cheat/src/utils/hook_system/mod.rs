@@ -1,4 +1,5 @@
 use crate::common;
+use anyhow::bail;
 use common::{c_void, from_mut, null_mut};
 
 use std::collections::VecDeque;
@@ -45,17 +46,9 @@ impl Hook {
         F: Fn() -> *mut c_void,
         R: From<*mut c_void>,
     {
-        // Acquire the lock and use the guard directly
+        let targets =
+            TARGETS.lock().inspect_err(|err| tracing::error!("TARGETS is poisoned: {err}")).ok()?;
 
-        let targets = match TARGETS.lock() {
-            Ok(guard) => guard,
-            Err(_) => {
-                eprintln!("Failed to lock TARGETS");
-                return None;
-            }
-        };
-
-        // Use the guard to perform the search
         targets.iter().find(|hook| hook.detour == func()).map(|hook| R::from(hook.original))
     }
 
@@ -76,7 +69,7 @@ impl Hook {
     #[must_use]
     pub fn hook(target: *const c_void, detour: *const c_void) -> bool {
         let Ok(mut targets) = TARGETS.lock() else {
-            eprintln!("Failed to lock TARGETS");
+            tracing::error!("failed to lock TARGETS");
             return false;
         };
 
@@ -91,8 +84,10 @@ impl Hook {
             // SAFETY: Enabling the hook with MinHook library.
             unsafe {
                 minhook_sys::MH_EnableHook(hk.target);
-            };
+            }
+
             targets.push_back(hk);
+
             true
         } else {
             false
@@ -113,50 +108,29 @@ impl Hook {
 /// # Panics
 ///
 /// This function does not panic, but it relies on `minhook_sys::MH_Initialize`, which may potentially fail.
-pub fn initialize_minhook() -> anyhow::Result<(), String> {
+pub fn initialize_minhook() -> anyhow::Result<()> {
     // Safety: We are calling an external C library function that initializes MinHook.
     // The function `MH_Initialize` is expected to return 0 on success and a non-zero value on failure.
     // We assume the library's documentation and contract are correct, and we handle the error accordingly.
-    unsafe {
-        if minhook_sys::MH_Initialize() != 0i32 {
-            return Err("Failed to initialize MinHook".to_owned());
-        }
+    if unsafe { minhook_sys::MH_Initialize() } != 0 {
+        bail!("failed to initialize MinHook");
+    }
 
-        println!("MinHook initialized successfully");
-    };
+    tracing::info!("MinHook initialized successfully");
 
     Ok(())
 }
 
-/// This macro is used to create a new hook for a specified target function and detour function.
-///
-/// # Parameters
-///
-/// * `$target_function:ident` - The identifier of the target function to be hooked.
-/// * `$detour_function:ident` - The identifier of the detour function that will replace the target function.
-///
-/// # Details
-///
-/// The macro takes two identifiers as input: `$target_function` and `$detour_function`.
-/// It then converts the function pointers to `*mut std::os::raw::c_void` and creates a new `Hook` instance using the `hook_system::Hook::new` function.
-/// If the hook creation is successful, it enables the hook using the `hook.enable()` method.
-/// If an error occurs during hook creation or enabling, it prints an error message and returns early.
 #[macro_export]
 macro_rules! create_hook {
     ($target_function:ident, $detour_function:ident) => {
-        let target_function_ptr = match $target_function {
-            Some(func) => func as *mut std::ffi::c_void,
-            None => {
-                bail!("Target function pointer is null");
-            }
-        };
-
+        let target_function = $target_function as *const std::ffi::c_void;
         let detour_function_ptr = $detour_function as *const std::ffi::c_void;
 
-        println!("Hooking target function: 0x{:x}", $target_function.unwrap_or(0));
+        tracing::info!("hooking target function: {target_function:p}");
 
-        if !hook_system::Hook::hook(target_function_ptr, detour_function_ptr) {
-            bail!("Failed to enable hook");
+        if !hook_system::Hook::hook(target_function, detour_function_ptr) {
+            bail!("failed to enable hook");
         }
     };
 }

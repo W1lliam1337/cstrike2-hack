@@ -1,6 +1,7 @@
 use std::num::ParseIntError;
 
 use crate::common;
+use anyhow::{bail, Context};
 use common::*;
 
 use windows::Win32::{
@@ -141,7 +142,7 @@ pub fn get_module_info(module_handle: HMODULE) -> Option<MODULEINFO> {
 /// * The `pattern` string contains a null byte or other invalid characters for a C string.
 /// * The `address_offset` calculation overflows.
 #[must_use]
-pub fn pattern_search(module_handle: HMODULE, pattern: &str) -> Option<usize> {
+pub fn pattern_search<T>(module_handle: HMODULE, pattern: &str) -> anyhow::Result<*const T> {
     // Parse the pattern string into bytes and handle wildcards
     let parsed_pattern_bytes: Result<Vec<Option<u8>>, ParseIntError> =
         pattern
@@ -156,14 +157,14 @@ pub fn pattern_search(module_handle: HMODULE, pattern: &str) -> Option<usize> {
             .collect();
 
     // Handle parsing errors and continue if successful
-    let pattern_bytes =
-        parsed_pattern_bytes.inspect_err(|err| eprintln!("Failed to parse pattern: {err}")).ok()?;
+    let pattern_bytes = parsed_pattern_bytes.context("failed to parse pattern: {err}")?;
 
     // Retrieve module information
-    let module_info = get_module_info(module_handle)?;
+    let module_info = get_module_info(module_handle).context("failed to get module info")?;
 
     let base_address = module_info.lpBaseOfDll;
-    let size = usize::try_from(module_info.SizeOfImage).ok()?;
+    let size = usize::try_from(module_info.SizeOfImage)
+        .context("failed to convert `SizeOfImage` to usize")?;
 
     // SAFETY: Convert base_address to a raw pointer for memory access
     let module_memory = unsafe {
@@ -180,16 +181,16 @@ pub fn pattern_search(module_handle: HMODULE, pattern: &str) -> Option<usize> {
             let address_offset = (base_address as usize)
                 .checked_add(i)
                 .ok_or_else(|| {
-                    eprintln!("Address calculation overflowed");
+                    tracing::error!("address calculation overflowed");
                     None::<usize>
                 })
-                .expect("Failed to calculate address");
+                .expect("failed to calculate address");
 
-            return Some(address_offset);
+            return Ok(address_offset as *const T);
         }
     }
 
-    None
+    bail!("pattern not found")
 }
 
 /// Retrieves a pointer to a specific interface from a module.
@@ -231,14 +232,14 @@ pub fn get_interface(module_handle: HMODULE, interface_name: &str) -> Option<*co
         get_proc_address(module_handle, "CreateInterface")
             .map(|addr| transmute(addr))
             .ok_or_else(|| {
-                eprintln!("Failed to get function address for CreateInterface");
+                tracing::error!("failed to get function address for CreateInterface");
                 None::<usize>
             })
-            .expect("Failed to cast CreateInterface to a function pointer")
+            .expect("failed to cast CreateInterface to a function pointer")
     };
 
     let interface_name_cstr = CString::new(interface_name)
-        .inspect_err(|err| eprintln!("Failed to create CString from interface_name: {err}"))
+        .inspect_err(|err| tracing::error!("failed to create CString from interface_name: {err}"))
         .ok()?;
 
     // SAFETY: We assume that `function` is a valid function pointer and `interface_name_cstr` is valid.

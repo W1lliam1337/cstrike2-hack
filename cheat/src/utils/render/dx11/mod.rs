@@ -129,10 +129,10 @@ pub fn init_from_swapchain(swapchain: &IDXGISwapChain) {
                 ui::draw_menu(ctx, settings);
             }
             None => {
-                eprintln!("Fonts are not set up");
+                tracing::warn!("fonts are not set up");
             }
         }
     }) {
-        eprintln!("Rendering error: {e}");
+        tracing::warn!("rendering error: {e}");
     }
 }
