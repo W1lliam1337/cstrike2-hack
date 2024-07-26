@@ -40,7 +40,6 @@ impl Hook {
     ///
     /// No errors are returned by this function, but note that the presence of `None` in the return type
     /// indicates that the original function was not found.
-    #[inline]
     pub fn get_proto_original<F, R>(func: F) -> Option<R>
     where
         F: Fn() -> *mut c_void,
@@ -74,7 +73,6 @@ impl Hook {
     /// # Panics
     ///
     /// Panics if it fails to lock the `TARGETS` mutex.
-    #[inline]
     #[must_use]
     pub fn hook(target: *const c_void, detour: *const c_void) -> bool {
         let Ok(mut targets) = TARGETS.lock() else {
@@ -115,7 +113,6 @@ impl Hook {
 /// # Panics
 ///
 /// This function does not panic, but it relies on `minhook_sys::MH_Initialize`, which may potentially fail.
-#[inline]
 pub fn initialize_minhook() -> anyhow::Result<(), String> {
     // Safety: We are calling an external C library function that initializes MinHook.
     // The function `MH_Initialize` is expected to return 0 on success and a non-zero value on failure.

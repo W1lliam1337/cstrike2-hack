@@ -56,7 +56,6 @@ extern "system" fn thread_startup(_: *mut c_void) -> u32 {
 /// # Panics
 ///
 /// This function will panic if creating a thread fails.
-#[inline]
 #[export_name = "DllMain"]
 pub extern "system" fn dll_main(
     _module: HMODULE,

@@ -39,7 +39,6 @@ impl Module {
     /// let module = Module::new("example.dll");
     /// ```
     #[must_use]
-    #[inline]
     pub fn new(name: &'static str) -> Self {
         let handle = module_handler::get_module_handle(name).expect("Failed to get module handle");
         Self { name, handle }
@@ -58,7 +57,6 @@ impl Module {
     /// let offset = module.find_seq_of_bytes("pattern").unwrap_or(0);
     /// ```
     #[must_use]
-    #[inline]
     pub fn find_seq_of_bytes(&self, pattern: &str) -> Option<usize> {
         module_handler::pattern_search(self.handle, pattern)
     }
@@ -76,7 +74,6 @@ impl Module {
     /// let func_ptr = module.get_export("function_name");
     /// ```
     #[must_use]
-    #[inline]
     pub fn get_export(&self, function_name: &str) -> Option<*mut c_void> {
         module_handler::get_proc_address(self.handle, function_name)
     }
@@ -94,7 +91,6 @@ impl Module {
     /// let interface_ptr = module.get_interface("interface_name");
     /// ```
     #[must_use]
-    #[inline]
     pub fn get_interface(&self, interface_name: &str) -> Option<*const usize> {
         module_handler::get_interface(self.handle, interface_name)
     }
@@ -109,7 +105,6 @@ impl Module {
     /// let module_name = module.name();
     /// ```
     #[must_use]
-    #[inline]
     pub const fn name(&self) -> &str {
         self.name
     }
@@ -144,7 +139,6 @@ static MODULES: OnceCell<Mutex<Vec<Module>>> = OnceCell::new();
 ///     Err(e) => eprintln!("Failed to initialize modules: {:?}", e),
 /// }
 /// ```
-#[inline]
 pub fn initialize_modules(names: &[&'static str]) -> anyhow::Result<()> {
     if MODULES.get().is_some() {
         return Err(anyhow::anyhow!("Modules are already initialized"));
@@ -179,7 +173,6 @@ macro_rules! define_module_accessors {
             ///
             /// # Panics
             /// Panics if the module is not initialized or if the module is not found.
-            #[inline]
             pub fn $name() -> &'static Module {
                 let module_name = concat!(stringify!($name), ".dll");
                 let modules_guard = MODULES.get().expect("Modules are not initialized").lock();

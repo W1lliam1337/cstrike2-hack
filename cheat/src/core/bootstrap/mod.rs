@@ -23,7 +23,6 @@ use crate::{
 /// This function may return the following errors:
 ///
 /// * `anyhow::Error`: If any of the initialization steps (`initialize_modules`, `setup`, `initialize_hooks`) fail.
-#[inline]
 pub fn initialize() -> anyhow::Result<()> {
     println!("Initializing core components...");
 

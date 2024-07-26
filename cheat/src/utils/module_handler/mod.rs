@@ -30,7 +30,6 @@ use windows::core::{PCSTR, PCWSTR};
 /// Returns a raw pointer to the module handle if the module is found. If the module is not found,
 /// the function returns `null`. The returned handle can be used with other Windows API functions to
 /// interact with the module.
-#[inline]
 #[must_use]
 pub fn get_module_handle(module_name: &str) -> Option<HMODULE> {
     // Convert the module name to a UTF-16 string with a null terminator
@@ -63,7 +62,6 @@ pub fn get_module_handle(module_name: &str) -> Option<HMODULE> {
 /// # Note
 ///
 /// The return value should be checked before use to avoid dereferencing null pointers.
-#[inline]
 #[must_use]
 pub fn get_proc_address(module_handle: HMODULE, proc_name: &str) -> Option<*mut c_void> {
     let proc_name_cstr = CString::new(proc_name).ok()?;
@@ -93,7 +91,6 @@ pub fn get_proc_address(module_handle: HMODULE, proc_name: &str) -> Option<*mut 
 /// and entry point of the module.
 ///
 /// Returns `None` if the module information cannot be obtained or if an error occurs.
-#[inline]
 #[must_use]
 pub fn get_module_info(module_handle: HMODULE) -> Option<MODULEINFO> {
     let mut module_info =
@@ -143,7 +140,6 @@ pub fn get_module_info(module_handle: HMODULE) -> Option<MODULEINFO> {
 /// * The `pattern` string contains invalid hexadecimal characters.
 /// * The `pattern` string contains a null byte or other invalid characters for a C string.
 /// * The `address_offset` calculation overflows.
-#[inline]
 #[must_use]
 pub fn pattern_search(module_handle: HMODULE, pattern: &str) -> Option<usize> {
     // Parse the pattern string into bytes and handle wildcards
@@ -228,7 +224,6 @@ pub fn pattern_search(module_handle: HMODULE, pattern: &str) -> Option<usize> {
 ///
 /// The returned pointer is raw and should be used with caution. Ensure that the pointer is valid before
 /// dereferencing or using it.
-#[inline]
 #[must_use]
 pub fn get_interface(module_handle: HMODULE, interface_name: &str) -> Option<*const usize> {
     // SAFETY: We assume that `get_proc_address` returns a valid function pointer.
