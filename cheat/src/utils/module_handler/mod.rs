@@ -66,11 +66,7 @@ pub fn get_module_handle(module_name: &str) -> Option<HMODULE> {
 #[inline]
 #[must_use]
 pub fn get_proc_address(module_handle: HMODULE, proc_name: &str) -> Option<*mut c_void> {
-    let proc_name_cstr = match CString::new(proc_name) {
-        Ok(cstr) => cstr,
-        Err(_) => return None, // Return None if proc_name is invalid
-    };
-
+    let proc_name_cstr = CString::new(proc_name).ok()?;
     // SAFETY: The caller must ensure that `module_handle` is a valid module handle and
     // `proc_name` is a valid function name. The external `GetProcAddress` function is
     // used to retrieve the function address. The result is cast to `*mut c_void`.
@@ -103,10 +99,7 @@ pub fn get_module_info(module_handle: HMODULE) -> Option<MODULEINFO> {
     let mut module_info =
         MODULEINFO { lpBaseOfDll: null_mut(), SizeOfImage: 0, EntryPoint: null_mut() };
 
-    let size_of_module_info = match u32::try_from(size_of::<MODULEINFO>()) {
-        Ok(size) => size,
-        Err(_) => return None, // Return None if size conversion fails
-    };
+    let size_of_module_info = u32::try_from(size_of::<MODULEINFO>()).ok()?;
 
     // SAFETY: The caller must ensure that `module_handle` is a valid handle to a loaded module.
     unsafe {
@@ -167,25 +160,14 @@ pub fn pattern_search(module_handle: HMODULE, pattern: &str) -> Option<usize> {
             .collect();
 
     // Handle parsing errors and continue if successful
-    let pattern_bytes = match parsed_pattern_bytes {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            eprintln!("Failed to parse pattern: {e}");
-            return None;
-        }
-    };
+    let pattern_bytes =
+        parsed_pattern_bytes.inspect_err(|err| eprintln!("Failed to parse pattern: {err}")).ok()?;
 
     // Retrieve module information
-    let module_info = match get_module_info(module_handle) {
-        Some(info) => info,
-        None => return None,
-    };
+    let module_info = get_module_info(module_handle)?;
 
     let base_address = module_info.lpBaseOfDll;
-    let size = match usize::try_from(module_info.SizeOfImage) {
-        Ok(size) => size,
-        Err(_) => return None,
-    };
+    let size = usize::try_from(module_info.SizeOfImage).ok()?;
 
     // SAFETY: Convert base_address to a raw pointer for memory access
     let module_memory = unsafe {
@@ -260,13 +242,9 @@ pub fn get_interface(module_handle: HMODULE, interface_name: &str) -> Option<*co
             .expect("Failed to cast CreateInterface to a function pointer")
     };
 
-    let interface_name_cstr = match CString::new(interface_name) {
-        Ok(cstr) => cstr,
-        Err(_) => {
-            eprintln!("Failed to create CString from interface_name");
-            return None;
-        }
-    };
+    let interface_name_cstr = CString::new(interface_name)
+        .inspect_err(|err| eprintln!("Failed to create CString from interface_name: {err}"))
+        .ok()?;
 
     // SAFETY: We assume that `function` is a valid function pointer and `interface_name_cstr` is valid.
     Some(unsafe { function(interface_name_cstr.as_ptr(), null_mut()) as *const usize })

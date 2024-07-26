@@ -47,6 +47,7 @@ impl Hook {
         R: From<*mut c_void>,
     {
         // Acquire the lock and use the guard directly
+
         let targets = match TARGETS.lock() {
             Ok(guard) => guard,
             Err(_) => {
@@ -76,9 +77,7 @@ impl Hook {
     #[inline]
     #[must_use]
     pub fn hook(target: *const c_void, detour: *const c_void) -> bool {
-        let mut targets = if let Ok(guard) = TARGETS.lock() {
-            guard
-        } else {
+        let Ok(mut targets) = TARGETS.lock() else {
             eprintln!("Failed to lock TARGETS");
             return false;
         };
