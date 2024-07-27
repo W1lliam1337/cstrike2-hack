@@ -1,9 +1,12 @@
 use crate::common;
 use anyhow::bail;
 use common::{c_void, from_mut, null_mut};
+use lazy_static::lazy_static;
 
-use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
 /// Represents a function hook.
 pub struct Hook {
@@ -15,7 +18,7 @@ pub struct Hook {
     original: *mut c_void,
 }
 
-lazy_static::lazy_static! {
+lazy_static! {
     static ref TARGETS: Arc<Mutex<VecDeque<Hook>>> = Arc::new(Mutex::new(VecDeque::new()));
 }
 
